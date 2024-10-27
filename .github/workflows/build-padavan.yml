@@ -19,42 +19,43 @@ jobs:
       uses: actions/checkout@master
 
     - name: Initialization environment
-      env:
-        DEBIAN_FRONTEND: noninteractive
       run: |
         sudo apt-get update
         sudo apt-get -y install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd fakeroot \
-        cpio git python3-docutils gettext automake autopoint texinfo build-essential help2man \
-        pkg-config zlib1g-dev libgmp3-dev libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget
+        cpio git wget
+
+        # Install python3-docutils instead of python-docutils
+        sudo apt-get -y install python3-docutils
 
     - name: Clone source code
       env:
         KERNEL: 3.4
       run: |
-        mkdir -p /home/runner/rt-n56u
-        if [ $KERNEL = "4.4" ] ; then
-          git clone --depth=1 https://github.com/MeIsReallyBa/padavan-4.4.git /home/runner/rt-n56u
+        if [ "$KERNEL" = "4.4" ]; then
+          git clone --depth=1 https://github.com/MeIsReallyBa/padavan-4.4.git /opt/rt-n56u
         else
-          git clone --depth=1 https://github.com/chongshengB/rt-n56u.git /home/runner/rt-n56u
+          git clone --depth=1 https://github.com/chongshengB/rt-n56u.git /opt/rt-n56u
         fi
-        cd /home/runner/rt-n56u/toolchain-mipsel
+
+        cd /opt/rt-n56u/toolchain-mipsel
         sh dl_toolchain.sh
-        mkdir -p /home/runner/images/
+        mkdir -p /opt/images/
 
     - name: Build Firmware
       env:
         TNAME: K2P
         KERNEL: 3.4
       run: |
-        cd /home/runner/rt-n56u/trunk
-        if [ ! -f configs/templates/$TNAME.config ] ; then
-          echo "configs/templates/$TNAME.config not found "
+        cd /opt/rt-n56u/trunk
+        if [ ! -f configs/templates/$TNAME.config ]; then
+          echo "configs/templates/$TNAME.config not found"
           exit 1
         fi
+        
         cp -f configs/templates/$TNAME.config .config
         sed -i 's/CONFIG_FIRMWARE_INCLUDE_OPENSSL_EXE=n/CONFIG_FIRMWARE_INCLUDE_OPENSSL_EXE=y/g' .config
         
-        # 删除不需要的配置项
+        # Remove unwanted configurations
         sed -i '/CONFIG_FIRMWARE_INCLUDE_MENTOHUST/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_SCUTCLIENT/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS/d' .config
@@ -67,12 +68,12 @@ jobs:
         sed -i '/CONFIG_FIRMWARE_INCLUDE_ALIDDNS/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_SMARTDNS/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_SRELAY/d' .config
-        
-        if [ $KERNEL = "4.4" ] ; then
+
+        # Add configurations based on the kernel version
+        if [ "$KERNEL" = "4.4" ]; then
           echo "CONFIG_FIRMWARE_INCLUDE_MENTOHUST=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_SCUTCLIENT=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_SSOBFS=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_ADBYBY=v" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_DNSFORWARDER=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_SRELAY=n" >> .config
@@ -86,35 +87,22 @@ jobs:
           echo "CONFIG_FIRMWARE_INCLUDE_MENTOHUST=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_SCUTCLIENT=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_SSOBFS=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_SSSERVER=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_DNSFORWARDER=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_ADBYBY=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_FRPC=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_FRPS=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_TUNSAFE=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_ALIDDNS=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_SMARTDNS=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_SMARTDNSBIN=n" >> .config
           echo "CONFIG_FIRMWARE_INCLUDE_V2RAY=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_TROJAN=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_KOOLPROXY=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_CADDY=y" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_CADDYBIN=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_ADGUARDHOME=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_SRELAY=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_WYY=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_WYYBIN=n" >> .config
-          echo "CONFIG_FIRMWARE_INCLUDE_ZEROTIER=n" >> .config
         fi
-        
+
         sudo ./clear_tree
         sudo ./build_firmware_modify $TNAME 0
-        sudo mv -f images/*.trx /home/runner/images/
+        sudo mv -f images/*.trx /opt/images/
 
     - name: Upload packages
       uses: actions/upload-artifact@master
       if: always()
       with:
         name: Padavan-packages
-        path: /home/runner/images
+        path: /opt/images
